@@ -29,9 +29,10 @@ The goals / steps of this project are the following:
 
 ###Camera Calibration
 
-####1. Briefly state how you computed the camera matrix and distortion coefficients. Provide an example of a distortion corrected calibration image.
+####1. Camera calibration is the process of estimating intrinsic and/or extrinsic parameters. Intrinsic parameters deal with the camera's internal characteristics, such as, its focal length, skew, distortion, and image center. Extrinsic parameters describe its position and orientation in the world. The basic method in calculating the Camera calibration is to capture 
+known pattern like chessboard grid  and comparing with captured images from multiple anges. OpenCV libray provides cv2.calibrateCamera API for this purpose.
 
-The code for this step is contained in the first code cell of the IPython notebook located in "./examples/example.ipynb" (or in lines # through # of the file called `some_file.py`).  
+The code for this step is contained  in lines #10 through #30 of the file called `image_process.py`).  
 
 I start by preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
 
@@ -41,39 +42,53 @@ I then used the output `objpoints` and `imgpoints` to compute the camera calibra
 
 ###Pipeline (single images)
 
-####1. Provide an example of a distortion-corrected image.
-To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
+Following are various stages in our pipeline(from #1 to #6) where input image is processed sequentially.
+The implementation of pipeline can be found in `advanced_lanefind.py` from line #248 to #270. 
+
+
+####1. The first step is to undistort the input image to pipeline. Image distortion occurs when a camera looks at 3D objects in the real world and transforms them into a 2D image; this transformation isn’t perfect and changes the shape and size of the object. With camera calibration, we have calculated distortion cofficients for our camera. I have  used OpenCV cv2.undistort() API to undistort the image.
+
+The code for this step is contained  at lines #252 in `advanced_lanefind.py`. 
+
+Following is the example of a distortion-corrected image from test set,
+
 ![alt text][image2]
-####2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+
+####2. Next the image is processed to extract key features that can identify lanes clearly and removing unnecessary parts of the image using  color transforms, gradients  to create a thresholded binary image.  
+I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines #260 through #270 in `advanced_lanefind.py`). 
+
+Here's an example of my output for this step.  (note: this is not actually from one of the test images)
 
 ![alt text][image3]
 
-####3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
+####3. Due to 2D nature of the image, objects appear smaller the farther away and bigger as they are close to the camera. In our case we have lanes becoming smaller with the distance and appear to almost converge even though they are really parallel lines in the real world. To correct this, we need to  apply perspective transform and get a birdes eye view of the lanes.
 
-The code for my perspective transform includes a function called `warper()`, which appears in lines 1 through 8 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `warper()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
+The code for my perspective transform includes a function called `perspective_unwarp()`, which appears in lines #225 through #255 in the file `image_process.py`. The `perspective_unwarp()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the extract the source points on the lanes manullay using small script provide in `./lane_select/lane_select.py` and destination points are calculated with offset to map source points back to orinal image size.
+
+Following are source and destination points hardcoded in file `advanced_lanefind.py`  at line #308 and passed as argument to pipeline exectution. Points are  ordered left-top, right-top, bottom-right, bottom-left respectively.
 
 ```
-src = np.float32(
-    [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
-    [((img_size[0] / 6) - 10), img_size[1]],
-    [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 55), img_size[1] / 2 + 100]])
+vertices = np.array([[572,461],[709,459],[1052,674],[267,678]])
+src = np.float32(vertices)
+
+h_offset = 0 
+w_offset = 200
+
 dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
+    dst = np.float32([[w_offset, h_offset],
+    [w-w_offset, h_offset],
+    [w-w_offset, h-h_offset],
+    [w_offset, h-h_offset]]))
 
 ```
 This resulted in the following source and destination points:
 
 | Source        | Destination   | 
 |:-------------:|:-------------:| 
-| 585, 460      | 320, 0        | 
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
+| 572, 461      | 200, 0        | 
+| 709, 459      | 1080, 0       |
+| 1052, 674     | 1080, 720     |
+| 267, 678      | 200,  720     |
 
 I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
 
