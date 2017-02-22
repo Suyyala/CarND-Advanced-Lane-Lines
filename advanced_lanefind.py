@@ -58,6 +58,8 @@ def calculate_curvature(warped_img, lanes_info, margin=100):
 
     ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
     y_eval = np.max(ploty)
+    y_eval = binary_warped.shape[0]
+    #print(y_eval)
     
     # Fit a second order polynomial to each
     left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
@@ -67,6 +69,18 @@ def calculate_curvature(warped_img, lanes_info, margin=100):
     left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
     right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
 
+    #car position
+
+    # Generate x and y values for plotting
+    y_eval = binary_warped.shape[0] - 1
+    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+    
+    lane_mid_point = (left_fitx + right_fitx) / 2
+    offset_position = np.abs(np.ceil(binary_warped.shape[1]/2) - lane_mid_point)
+    offset_position = offset_position * xm_per_pix
+    #print(offset_position)
+
     #update latest curvature info
     left_lane.curvature.append(left_curverad)
     right_lane.curvature.append(right_curverad)
@@ -75,7 +89,7 @@ def calculate_curvature(warped_img, lanes_info, margin=100):
     if(len(right_lane.curvature) > 5):
         right_lane.curvature.pop(0)
 
-    return (left_curverad, right_curverad)
+    return (left_curverad, right_curverad, offset_position)
 
 
 def fit_lines_optimize_sliding_window(warped_img, lanes_info, margin=100):
@@ -111,6 +125,12 @@ def fit_lines_optimize_sliding_window(warped_img, lanes_info, margin=100):
     left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
     right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
+    out_img2 = np.dstack((binary_warped, binary_warped, binary_warped))*255
+
+    out_img2[lefty, leftx] = [255, 0, 0]
+    out_img2[righty, rightx] = [0, 0, 255]
+
+
     #update latest left, right fit info
     left_lane.detected = True
     left_lane.fit_history.append(left_fit)
@@ -121,7 +141,7 @@ def fit_lines_optimize_sliding_window(warped_img, lanes_info, margin=100):
     if(len(right_lane.fit_history) > 5):
         right_lane.fit_history.pop(0)
 
-    return left_fitx, right_fitx
+    return left_fitx, right_fitx, out_img2
 
 def fit_lines_sliding_window(warped_img, lanes_info):
     binary_warped = np.copy(warped_img)
@@ -215,11 +235,8 @@ def fit_lines_sliding_window(warped_img, lanes_info):
         if(len(right_lane.fit_history) > 5):
             right_lane.pop(0)
 
-    return left_fitx, right_fitx
+    return left_fitx, right_fitx, out_img2
 
-
-def radius_curvature():
-    return left_curved, right_curved
 
 
 def project_lines(original_img, warped_img, left_fitx, right_fitx, Minv, cam_dist):
@@ -245,17 +262,17 @@ def project_lines(original_img, warped_img, left_fitx, right_fitx, Minv, cam_dis
     return result
 
 # Edit this function to create your own pipeline.
-def lanedetect_pipeline(img, cam_mat, cam_dist, vertices=None, lanes_info=None):
+def lanedetect_pipeline(img, cam_mat, cam_dist, vertices=None, lanes_info=None, debug=False):
     img = np.copy(img)
 
     #1. image  undistort
     img = cv2.undistort(img, cam_mtx, cam_dist, None, cam_mtx)
-    #3. Perspecitve transform
-    # apply the four point tranform to obtain a "birds eye view" of
-    # the image
-    warped_img, M, Minv = perspective_unwarp(img, vertices)
+    if(debug is True):
+         mpimg.imsave('./output_images/' +  'debug_undistort.jpg', img)
+
     
     #2. apply gradient and color threads
+    warped_img = img
     
     gradx_binary = abs_sobel_threshold(warped_img, orient='x', threshold=(60,180))
     grady_binary = abs_sobel_threshold(warped_img, orient='y', threshold=(60,180))
@@ -270,25 +287,57 @@ def lanedetect_pipeline(img, cam_mat, cam_dist, vertices=None, lanes_info=None):
     combined_color_binary[ ( (gradx_binary == 1) & (grady_binary == 1)) | (color_binary == 1)  | ((mag_binary == 1) & (dir_binary==1))] = 1
     
     #warped_img = perspective_unwarp(combined_color_binary, vertices)
-    lf = None
-    rf = None
+
+    if(debug is True):
+         mpimg.imsave('./output_images/' +  'debug_combined_binary.jpg', combined_color_binary)
+
+
+    #3. Perspecitve transform
+    # apply the four point tranform to obtain a "birds eye view" of
+    # the image
+    warped_img, M, Minv = perspective_unwarp(combined_color_binary, vertices)
+    if(debug is True):
+         mpimg.imsave('./output_images/' +  'debug_perspective_unwarp.jpg', warped_img)
+
+    combined_color_binary = warped_img
+    
+    lf, rf = None, None
+    linefit_img = None
+    lcd, rcd = None, None
+    car_position_offset = 0
     if lanes_info:
         left_lane, right_lane = lanes_info[:]
         if(left_lane.detected == True and right_lane.detected == True):
-            lf, rf = fit_lines_optimize_sliding_window(combined_color_binary, lanes_info)
+            lf, rf, linefit_img = fit_lines_optimize_sliding_window(combined_color_binary, lanes_info)
         else:
-            lf, rf = fit_lines_sliding_window(combined_color_binary, lanes_info)
-        calculate_curvature(combined_color_binary, lanes_info)
+            lf, rf, linefit_img = fit_lines_sliding_window(combined_color_binary, lanes_info)
+        lcd, rcd, car_position_offset = calculate_curvature(combined_color_binary, lanes_info)
     else:
-        lf, rf = fit_lines_sliding_window(combined_color_binary, lanes_info)
+        lf, rf, linefit_img = fit_lines_sliding_window(combined_color_binary, lanes_info)
+
+
+    if debug is True:
+         mpimg.imsave('./output_images/' +  'debug_linefit.jpg', linefit_img)
+
+    result = project_lines(img, combined_color_binary, lf, rf, Minv, cam_dist)
+
+    #vehicle position
+
 
     #return fit_img2
-    result = project_lines(img, combined_color_binary, lf, rf, Minv, cam_dist)
+    # Write some Text
+    if lcd is not None or rcd is not None:
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        text =  'curvature: ' + str(lcd) + ', '  + str(rcd)
+        cv2.putText(result, text ,(50,50), font, 1,(255,255,255),2)
+        text = 'car position offset: ' + str(car_position_offset)
+        cv2.putText(result, text ,(50,100), font, 1,(255,255,255),2)
+
     return result
 
 
 #0. Camera Calibration 
-cam_mtx, cam_dist = calibrate_camera()
+cam_mtx, cam_dist = calibrate_camera(debug=False)
 print('camera matrix: ', cam_mtx)
 print('distortion matrix: ', cam_dist)
 straight_images = glob.glob('./test_images/straight*.jpg')
@@ -299,14 +348,16 @@ for fname in straight_images:
     img = mpimg.imread(fname)
     #1. image  undistort
     img = cv2.undistort(img, cam_mtx, cam_dist, None, cam_mtx)
+    mpimg.imsave('./output_images/' +  'undistort_' + fname.split('/')[-1] , img)
     #lines_img = perspective_detect_src_points(img)
     
     #vertices = np.array([[601,443],[680,443],[1020,657],[295,657]])
     #vertices = np.array([[552,474],[733,474],[996,640],[310,640]])
     #vertices = np.array([[552,474],[733,474],[1052,674],[267,678]])
     #vertices = np.array([[594,449],[687,449],[1052,674],[267,678]])
-    vertices = np.array([[572,461],[709,459],[1052,674],[267,678]])
-    #warped_img = four_point_transform(image, vertices)
+    #vertices = np.array([[572,461],[709,459],[1052,674],[267,678]])
+    #vertices = np.array([[600,444],[680,441],[1059,681],[260,682]])
+    vertices = np.array([[585,453],[696,453],[1059,681],[260,682]])
     
     warped_img, M, Minv = perspective_unwarp(img, vertices)
     mpimg.imsave('./output_images/' +  fname.split('/')[-1] , warped_img)
@@ -316,7 +367,7 @@ images = glob.glob('./test_images/test*.jpg')
 for fname in images:
     print(fname)
     image = mpimg.imread(fname)
-    result_img = lanedetect_pipeline(image, cam_mtx, cam_dist, vertices, lanes_info=None)
+    result_img = lanedetect_pipeline(image, cam_mtx, cam_dist, vertices, lanes_info=None, debug=True)
     print(result_img.shape)
     #plt.imshow(result_img)
     mpimg.imsave('./output_images/' +  fname.split('/')[-1] , result_img)
@@ -330,7 +381,7 @@ def process_image(image):
     return result
 
 white_output = 'project_video_out.mp4'
-clip1 = VideoFileClip("project_video_small2.mp4", audio=False)
+clip1 = VideoFileClip("project_video_10sec.mp4", audio=False)
 white_clip = clip1.fl_image(process_image) #NOTE: this function expects color images!!
 white_clip.write_videofile(white_output, audio=False)
 

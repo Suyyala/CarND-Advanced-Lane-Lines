@@ -7,7 +7,7 @@ import glob
 import os
 
 
-def calibrate_camera():
+def calibrate_camera(debug=False):
     
     objpoints = []
     imgpoints = []
@@ -36,6 +36,13 @@ def calibrate_camera():
 
     if len(imgpoints) > 0:
         ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray_image.shape[::-1] ,None,None)
+    
+    if debug is True:
+        for fname in images:
+            #print(fname)
+            image = mpimg.imread(fname)
+            image_undist = cv2.undistort(image, mtx, dist, None, mtx)
+            mpimg.imsave('./output_images/' +  fname.split('/')[-1] , image_undist)
     return mtx, dist
 
 
