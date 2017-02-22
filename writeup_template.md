@@ -94,19 +94,33 @@ I verified that my perspective transform was working as expected by drawing the 
 
 ![alt text][image4]
 
-####4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
+####4. Locate the Lane Lines and Fit a Polynomial
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
+To Locate Lane pixel for right and left lanes, first I have applied histogram to bottom half of the image to obtain the peak pixels in the image. With left and right lanes we have two peaks in the left and right halves of the histogram. These will be the starting point for the left and right lines with histogram midpoint as seperation. Then I have used sliding window technique in the left and right havles respectively to obtain the all the non-zero left pixels and right pixels. Then used np.polyfit to fit the left pixels to obtain the left lane line equation and used right pixels to obtain the right lane equation.
+
+The code for histogram, sliding window pixel finding and line fitting are  implementation are in  `fit_lines_sliding_window()`, which appears in lines #126 through #218 in the file `advanced_lanefind.py`.
+
+Also, optimized sliding window search region with previous results cached and implemetation is located in 
+`fit_lines_optimize_sliding_window()` between lines #81 through #124 in the file `advanced_lanefind.py`.
+
+Following is example of resultant image overlayed with lane finding equation,
 
 ![alt text][image5]
 
-####5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
+####5. Calculating radius of lane curvature
 
-I did this in lines # through # in my code in `my_other_file.py`
+In the last stage, I have  located the lane line pixels, used their x and y pixel positions to fit a second order polynomial curve:
+f(y)=Ay**2 +By+C,  A, B, C are line co-efficeints.
 
-####6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
+Next, I have caclulated radious of curvature using the following equation, also applied conversion from pixel space to meters
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+Rcurve  = (1+(2Ay+B) ** 2) ** 3/2 / ∣2A∣
+
+I did this in lines #29 through #78 in my code in `advanced_lanefind.py`
+
+####6. In the final stage,  are left line and right line points are projected back onto original image using inverse perspecitve matrix such that the lane area is identified clearly.
+
+I implemented this step in lines #225 through #245 in my code in `advanced_lanefind.py` in the function `project_lines()`.  Here is an example of my result on a test image:
 
 ![alt text][image6]
 
