@@ -14,13 +14,13 @@ The goals / steps of this project are the following:
 
 [//]: # (Image References)
 
-[image1]: ./examples/undistort_output.png "Undistorted"
-[image2]: ./test_images/test1.jpg "Road Transformed"
-[image3]: ./examples/binary_combo_example.jpg "Binary Example"
-[image4]: ./examples/warped_straight_lines.jpg "Warp Example"
-[image5]: ./examples/color_fit_lines.jpg "Fit Visual"
-[image6]: ./examples/example_output.jpg "Output"
-[video1]: ./project_video.mp4 "Video"
+[image1]: ./output_images/chess_undistort.png "Undistorted"
+[image2]: ./output_images/test1_undistort.jpg "Road Transformed"
+[image3]: ./examples/test1_binary_combined.jpg "Binary Example"
+[image4]: ./output_images/straight_lines1.jpg "Warp Example"
+[image5]: ./output_images/test1_fit_lines.jpg "Fit Visual"
+[image6]: ./output_images/test1_result.jpg "Output"
+[video1]: ./project_video_out.mp4 "Video"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
 ###Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
@@ -57,7 +57,7 @@ Following is the example of a distortion-corrected image from test set,
 ####2. Next the image is processed to extract key features that can identify lanes clearly and removing unnecessary parts of the image using  color transforms, gradients  to create a thresholded binary image.  
 I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines #260 through #270 in `advanced_lanefind.py`). 
 
-Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+Here's an example of my output for this step. 
 
 ![alt text][image3]
 
