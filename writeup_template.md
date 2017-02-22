@@ -128,15 +128,22 @@ I implemented this step in lines #225 through #245 in my code in `advanced_lanef
 
 ###Pipeline (video)
 
-####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
-
-Here's a [link to my video result](./project_video.mp4)
+####1. 
+My project video  output is located at 
+./project_video_out.mp4
 
 ---
 
 ###Discussion
 
 ####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+Here are the few issues that find during my implementation,
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+1. For perspective transformation, source points is still hardcoded and manully extracted
+2. My pipeline is NOT fully robust to shades or reflections in the image
+3. My pipeline is NOT robust to missing lanes or arbrupt lane changes.
+4. Road plane assumed to be super flat and will be problem on bumpy or slant roads.
+
+Given lot of approximations and assumptions, I think deep learning approach to driving with image processing feature to 
+reduce the noise will be of great approach.
 
