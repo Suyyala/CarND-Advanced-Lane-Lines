@@ -25,18 +25,48 @@ class LaneLine():
         self.curvature = []
 
 
-# Example values: 1926.74 1908.48
-def calculate_curvature(warped_img, lanes_info, margin=100):
-    # Assume you now have a new warped binary image 
-    # from the next frame of video (also called "binary_warped")
-    # It's now much easier to find line pixels!
+def calculate_car_position(warped_img, lanes_info):
+
     if lanes_info is None:
         return None, None
+
+    binary_warped = np.copy(warped_img)
+
+    #retrieve cached values of fit values in pixel space
+    left_lane, right_lane = lanes_info[:]
+    current_fit = len(left_lane.fit_history)-1
+    left_fit = left_lane.fit_history[current_fit]
+    right_fit = right_lane.fit_history[current_fit]
+
+    #car position which is bottom of the image close to y-max
+    ym_per_pix = 30/720 # meters per pixel in y dimension
+    xm_per_pix = 3.7/700 # meters per pixel in x dimension
+
+    y_eval = binary_warped.shape[0] - 1
+    left_fitx = left_fit[0]*y_eval**2 + left_fit[1]*y_eval + left_fit[2]
+    right_fitx = right_fit[0]*y_eval**2 + right_fit[1]*y_eval + right_fit[2]
+    
+    lane_mid_point = (left_fitx + right_fitx) / 2
+
+    offset_position = np.abs(np.ceil(binary_warped.shape[1]/2) - lane_mid_point)
+    offset_position = offset_position * xm_per_pix
+    return offset_position
+
+
+# Example values: 1926.74 1908.48
+def calculate_curvature(warped_img, lanes_info, margin=100):
+   
+    if lanes_info is None:
+        return None, None
+
+    #retrieve cached values of fit values in pixel space
 
     left_lane, right_lane = lanes_info[:]
     current_fit = len(left_lane.fit_history)-1
     left_fit = left_lane.fit_history[current_fit]
     right_fit = right_lane.fit_history[current_fit]
+
+    #re-calculate co-efficents for real-world space
 
     binary_warped = np.copy(warped_img)
     nonzero = binary_warped.nonzero()
@@ -69,16 +99,6 @@ def calculate_curvature(warped_img, lanes_info, margin=100):
     left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
     right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
 
-    #car position
-
-    # Generate x and y values for plotting
-    y_eval = binary_warped.shape[0] - 1
-    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-    
-    lane_mid_point = (left_fitx + right_fitx) / 2
-    offset_position = np.abs(np.ceil(binary_warped.shape[1]/2) - lane_mid_point)
-    offset_position = offset_position * xm_per_pix
     #print(offset_position)
 
     #update latest curvature info
@@ -89,7 +109,7 @@ def calculate_curvature(warped_img, lanes_info, margin=100):
     if(len(right_lane.curvature) > 5):
         right_lane.curvature.pop(0)
 
-    return (left_curverad, right_curverad, offset_position)
+    return (left_curverad, right_curverad)
 
 
 def fit_lines_optimize_sliding_window(warped_img, lanes_info, margin=100):
@@ -270,24 +290,16 @@ def lanedetect_pipeline(img, cam_mat, cam_dist, vertices=None, lanes_info=None, 
     if(debug is True):
          mpimg.imsave('./output_images/' +  'debug_undistort.jpg', img)
 
-    
-    #2. apply gradient and color threads
-    warped_img = img
-    
-    gradx_binary = abs_sobel_threshold(warped_img, orient='x', threshold=(60,180))
-    grady_binary = abs_sobel_threshold(warped_img, orient='y', threshold=(60,180))
-    mag_binary = mag_sobel_threshold(warped_img, sobel_kernel=15, threshold=(60,150))
-    #dir_binary = dir_sobel_threshold(warped_img, sobel_kernel=15, threshold=(0.7, 1.2))
-    dir_binary = dir_sobel_threshold(warped_img, sobel_kernel=15, threshold=(0.7, 1.2))
-    color_binary = hls_color_threshold(warped_img, threshold=(170,255))
+    #2. Apply Color, Gradient thresholds
+    gradx_binary = abs_sobel_threshold(img, orient='x', threshold=(60,180))
+    grady_binary = abs_sobel_threshold(img, orient='y', threshold=(60,180))
+    mag_binary = mag_sobel_threshold(img, sobel_kernel=15, threshold=(60,150))
+    dir_binary = dir_sobel_threshold(img, sobel_kernel=15, threshold=(0.7, 1.2))
+    color_binary = hls_color_threshold(img, threshold=(170,255))
 
     combined_color_binary = np.zeros_like(gradx_binary)
-    #combined_color_binary[ ( (gradx_binary == 1) & (grady_binary == 1)) | (color_binary == 1)  | ((mag_binary == 1) & (dir_binary==1))] = 1
-    #combined_color_binary[ ( (gradx_binary == 1) & (grady_binary == 1)) | (color_binary == 1)  ] = 1
     combined_color_binary[ ( (gradx_binary == 1) & (grady_binary == 1)) | (color_binary == 1)  | ((mag_binary == 1) & (dir_binary==1))] = 1
-    
-    #warped_img = perspective_unwarp(combined_color_binary, vertices)
-
+ 
     if(debug is True):
          mpimg.imsave('./output_images/' +  'debug_combined_binary.jpg', combined_color_binary)
 
@@ -298,34 +310,33 @@ def lanedetect_pipeline(img, cam_mat, cam_dist, vertices=None, lanes_info=None, 
     warped_img, M, Minv = perspective_unwarp(combined_color_binary, vertices)
     if(debug is True):
          mpimg.imsave('./output_images/' +  'debug_perspective_unwarp.jpg', warped_img)
-
-    combined_color_binary = warped_img
     
+    #4. Lane detection using Sliding window
     lf, rf = None, None
     linefit_img = None
     lcd, rcd = None, None
-    car_position_offset = 0
+    car_position_offset = 0.
     if lanes_info:
         left_lane, right_lane = lanes_info[:]
         if(left_lane.detected == True and right_lane.detected == True):
-            lf, rf, linefit_img = fit_lines_optimize_sliding_window(combined_color_binary, lanes_info)
+            lf, rf, linefit_img = fit_lines_optimize_sliding_window(warped_img, lanes_info)
         else:
-            lf, rf, linefit_img = fit_lines_sliding_window(combined_color_binary, lanes_info)
-        lcd, rcd, car_position_offset = calculate_curvature(combined_color_binary, lanes_info)
-    else:
-        lf, rf, linefit_img = fit_lines_sliding_window(combined_color_binary, lanes_info)
+            lf, rf, linefit_img = fit_lines_sliding_window(warped_img, lanes_info)
+       
+        #5. Calculate Radius of Curvature and Car position
+        lcd, rcd = calculate_curvature(warped_img, lanes_info)
+        car_position_offset = calculate_car_position(warped_img,lanes_info)
 
+    else:
+        lf, rf, linefit_img = fit_lines_sliding_window(warped_img, lanes_info)
 
     if debug is True:
          mpimg.imsave('./output_images/' +  'debug_linefit.jpg', linefit_img)
 
-    result = project_lines(img, combined_color_binary, lf, rf, Minv, cam_dist)
+    #6. Project overlay back onto original image
+    result = project_lines(img, warped_img, lf, rf, Minv, cam_dist)
 
-    #vehicle position
-
-
-    #return fit_img2
-    # Write some Text
+    # overlay text resuluts
     if lcd is not None or rcd is not None:
         font = cv2.FONT_HERSHEY_SIMPLEX
         text =  'curvature: ' + str(lcd) + ', '  + str(rcd)
@@ -381,7 +392,7 @@ def process_image(image):
     return result
 
 white_output = 'project_video_out.mp4'
-clip1 = VideoFileClip("project_video_10sec.mp4", audio=False)
+clip1 = VideoFileClip("project_video.mp4", audio=False)
 white_clip = clip1.fl_image(process_image) #NOTE: this function expects color images!!
 white_clip.write_videofile(white_output, audio=False)
 
